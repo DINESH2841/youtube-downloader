@@ -3,160 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Video Downloader</title>
+    <title>Advanced YouTube Video Downloader</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .container {
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            padding: 2rem;
-            width: 90%;
-            max-width: 500px;
-        }
-        h1 {
-            color: #ff0000;
             text-align: center;
         }
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        input, select, button {
-            margin: 10px 0;
+        input[type="text"] {
+            width: 60%;
             padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
         }
-        button {
-            background-color: #ff0000;
-            color: #fff;
+        input[type="submit"] {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
             cursor: pointer;
-            transition: background-color 0.3s ease;
         }
-        button:hover {
-            background-color: #cc0000;
+        .progress {
+            margin-top: 20px;
         }
-        .logo {
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-        .logo svg {
-            width: 100px;
-            height: 100px;
-        }
-        #status {
-            text-align: center;
-            margin-top: 1rem;
-            font-weight: bold;
-        }
-        .quality-option {
-            display: inline-block;
-            margin: 0.5rem;
-            padding: 0.5rem 1rem;
-            background-color: #f0f0f0;
-            border-radius: 4px;
-            text-decoration: none;
-            color: #333;
-            transition: background-color 0.3s;
-        }
-        .quality-option:hover {
-            background-color: #e0e0e0;
+        .spinner {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" fill="#ff0000"/>
-            </svg>
-        </div>
-        <h1>YouTube Video Downloader</h1>
-        <form id="download-form">
-            <label for="video-url">YouTube Video URL:</label>
-            <input type="text" id="video-url" placeholder="Enter YouTube Video URL" required onblur="fetchFormats()">
-            <label for="video-quality">Select Video Quality:</label>
-            <select id="video-quality" name="format_id" required></select>
-            <button type="submit">Download Video</button>
-        </form>
-        <p id="status"></p>
+    <h1>YouTube Video Downloader</h1>
+    <form id="downloadForm" method="POST">
+        <label for="video_url">Enter YouTube Video URL:</label><br><br>
+        <input type="text" id="video_url" name="video_url" required><br><br>
+        <input type="submit" value="Download">
+    </form>
+    
+    <div class="progress">
+        <p id="statusMessage"></p>
+        <div id="spinner" class="spinner">Loading...</div>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+
     <script>
-        async function fetchFormats() {
-            const videoUrl = document.getElementById('video-url').value;
-            if (!videoUrl) {
-                document.getElementById('status').innerText = 'Please enter a valid URL.';
-                return;
+        document.getElementById("downloadForm").onsubmit = async function(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+            const video_url = formData.get("video_url");
+
+            const response = await fetch("/", {
+                method: "POST",
+                body: formData
+            });
+
+            if (response.redirected) {
+                const taskUrl = response.url;
+                pollStatus(taskUrl);
             }
-            try {
-                const response = await fetch(`http://127.0.0.1:8000/formats?link=${encodeURIComponent(videoUrl)}`);
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
+        };
+
+        async function pollStatus(url) {
+            const statusMessage = document.getElementById("statusMessage");
+            const spinner = document.getElementById("spinner");
+
+            spinner.style.display = "block";
+            let completed = false;
+
+            while (!completed) {
+                const response = await fetch(url);
+                const result = await response.json();
+
+                statusMessage.textContent = result.status;
+
+                if (result.state === 'SUCCESS' || result.state === 'FAILURE') {
+                    spinner.style.display = "none";
+                    completed = true;
                 }
-                const data = await response.json();
-                const formats = data.formats;
-                
-                const formatSelect = document.getElementById('video-quality');
-                formatSelect.innerHTML = '';
-                formats.forEach(format => {
-                    const option = document.createElement('option');
-                    option.value = format.format_id;
-                    option.text = `${format.quality} (${format.ext})`;
-                    formatSelect.add(option);
-                });
-                
-                document.getElementById('status').innerText = '';
-            } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('status').innerText = 'Failed to fetch formats';
+
+                await new Promise(r => setTimeout(r, 2000));  // Poll every 2 seconds
             }
         }
-
-        document.getElementById('download-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const videoUrl = document.getElementById('video-url').value;
-            const formatId = document.getElementById('video-quality').value;
-            
-            const formData = new FormData();
-            formData.append('link', videoUrl);
-            formData.append('format_id', formatId);
-
-            try {
-                const response = await fetch('http://127.0.0.1:8000/download', {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Video_${formatId}.mp4`;  // Name the file appropriately
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-
-                document.getElementById('status').innerText = 'Download complete!';
-            } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('status').innerText = 'An error occurred';
-            }
-        });
     </script>
 </body>
 </html>
